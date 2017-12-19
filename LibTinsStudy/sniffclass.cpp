@@ -44,7 +44,16 @@ Wpa2Sniffer::Wpa2Sniffer(char *mDev,bool (*fp)(PDU&))
 
 void Wpa2Sniffer::addDecryptInfo(std::string passwd, std::string ssid)
 {
+    this->passwd=passwd;
+    this->ssid=ssid;
+
+    //waiting for init decryptProxy
+    while(this->decryptProxy==nullptr);
     this->decryptProxy->decrypter().add_ap_data(passwd,ssid);
+//    this->decryptProxy->decrypter().add_ap_data("angel1004","angel3");
+    startFlag=true;
+
+
 }
 
 void Wpa2Sniffer::run()
@@ -52,16 +61,22 @@ void Wpa2Sniffer::run()
     SnifferConfiguration config;
     config.set_promisc_mode(true);
     Sniffer sniffer(sniffDev,config);
-    std::cout<<"Wpa2Sniffer Run()"<<std::endl;
+
     auto decryptProxy=Crypto::make_wpa2_decrypter_proxy(funcPtr);
     this->decryptProxy=&decryptProxy; //init decryptProxy Pointer to addDecryptInfo
-    addDecryptInfo(passwd,ssid);
+    //need to run after addDecryptInfo
+
+    //Waiting for add_ap_data()
+    while(!startFlag);
+
     sniffer.sniff_loop(decryptProxy);
 
     //if loop end
     this->decryptProxy=nullptr;
-    std::cout<<"Wpa2Sniffer End!"<<std::endl;
 }
+
+//This Line need to use static var
+std::mutex APSniffer::mtx;
 
 void APSniffer::upLinePrompt(int count)
 {
@@ -85,7 +100,60 @@ void APSniffer::showAPList()
         std::cout<<count<<" BSSID :  " <<it->first<<"   SSID :  "<<it->second<<std::endl;
     }
 
-    upLinePrompt(count+1); //console Line clear & +1 == dectected AP List
+//    upLinePrompt(count+1); //console Line clear & +1 == dectected AP List
+}
+
+void APSniffer::decryptProxyAdder(Wpa2Sniffer& wpa2Sniffer)
+{
+    //a little bit not match origin purpose(APSniffer) So need to modify
+    static DeauthSender deauthSender(sniffDev);
+
+    while(true)
+    {
+
+
+
+        mtx.lock();
+        showAPList();
+        printf("\n\n\n");
+
+        int num=0;
+        std::cout<<"Choose number that add to Decrypt Info <Reload AP list : 0>  : ";
+        std::cin>>num;
+        if(num==0)
+        {
+            std::cout<<"Waiting for 3 Sec to capture.."<<std::endl;
+            upLinePrompt(apMaxNum+6);
+            mtx.unlock();
+
+            //for Scan AP List
+            sleep(3);
+
+            continue;
+        }
+
+        if(num<0 || num>apMaxNum)
+        {
+            std::cout<<"You have a wrong choose Plz check the number"<<std::endl;
+            mtx.unlock();
+            continue;
+        }
+        apList::iterator it=aplistMap.begin();
+        for (int i = 0; i < num-1; ++i) {
+            it++;
+        }
+        std::string passwd;
+        std::cout<<"Input \" "<<it->second<<" \" Password : ";
+        std::cin>>passwd;
+
+        wpa2Sniffer.addDecryptInfo(passwd,it->second);
+        upLinePrompt(apMaxNum+6);
+
+        //Send Deauth Packet for Capture EAPOL
+        if(!deauthSender.sendDeauth(this->findBSSID(wpa2Sniffer.getSsid()),deauthSender.getBroadcast(), 2))
+            std::cout<<"AP Not Found !, Can't send Deauth Packet"<<std::endl;
+        mtx.unlock();
+    }
 }
 
 APSniffer::bssid APSniffer::findBSSID(std::string ssid)
@@ -102,13 +170,11 @@ APSniffer::bssid APSniffer::findBSSID(std::string ssid)
             if(ssid.compare(it->second)==0) //if ssid as same as it->second
             {
                 count++;
-//                std::cout<<"true"<<std::endl;
                 retBSSID=it->first;
 
             }
             //looping must be loop the end cuz it that possible to duplicate SSID
         }
-//        std::cout<<"loop end count : "<<count<<std::endl;
         if(count>0) //if find BSSID
             break;  //out
         sleep(3);
@@ -137,10 +203,13 @@ bool APSniffer::handle(PDU &pdu)
                  * a std::runtime_error.
                  */
                 std::string ssid = beacon.ssid();
-                aplistMap.insert(std::pair<bssid,std::string>(addr,ssid));
 
-                //if new AP is dectected Show All Ap List
-                showAPList();
+                //Need To mutex for other process
+                mtx.lock();
+                aplistMap.insert(std::pair<bssid,std::string>(addr,ssid));
+                apMaxNum++; //Add Maximum Map Count
+//                showAPList();
+                mtx.unlock();
             }
             catch (std::runtime_error&) {
                 // No ssid, just ignore it.
@@ -164,6 +233,17 @@ void APSniffer::run()
     config.set_rfmon(true);
     Sniffer sniffer(sniffDev, config);
     sniffer.sniff_loop(make_sniffer_handler(this, &APSniffer::handle));
+
+}
+
+Dot11::address_type DeauthSender::getBroadcast() const
+{
+    return broadcast;
+}
+
+void DeauthSender::setBroadcast(const Dot11::address_type &value)
+{
+    broadcast = value;
 }
 
 DeauthSender::DeauthSender(char *mDev)

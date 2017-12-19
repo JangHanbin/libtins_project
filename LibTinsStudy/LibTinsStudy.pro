@@ -7,12 +7,12 @@ LIBS += -lmysqlcppconn
 LIBS += -pthread
 SOURCES += main.cpp \
     sniffclass.cpp \
-    sqlmagition.cpp \
     printdata.cpp \
-    regexmagition.cpp
+    sqlmagician.cpp \
+    regexmagician.cpp
 
 HEADERS += \
     sniffclass.h \
-    sqlmagition.h \
     printdata.h \
-    regexmagition.h
+    sqlmagician.h \
+    regexmagician.h

