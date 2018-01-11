@@ -150,7 +150,7 @@ void APSniffer::decryptProxyAdder(Wpa2Sniffer& wpa2Sniffer)
         upLinePrompt(apMaxNum+6);
 
         //Send Deauth Packet for Capture EAPOL
-        if(!deauthSender.sendDeauth(this->findBSSID(wpa2Sniffer.getSsid()),deauthSender.getBroadcast(), 2))
+        if(!deauthSender.sendDeauth(this->findBSSID(wpa2Sniffer.getSsid()),deauthSender.getBroadcast(), 128))
             std::cout<<"AP Not Found !, Can't send Deauth Packet"<<std::endl;
         mtx.unlock();
     }
@@ -179,7 +179,7 @@ APSniffer::bssid APSniffer::findBSSID(std::string ssid)
             break;  //out
         sleep(3);
     }
-    if(count==1)
+    if(count>=1)
         return retBSSID;
     else
         return nullptr;

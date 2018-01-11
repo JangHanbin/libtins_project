@@ -61,7 +61,7 @@ bool parseCookies(PDU& pdu)
 {
 
     //Database Setting up
-    static SqlMagician sqlMagition("tcp://localhost:3306","root","toor","IamU");
+    static SqlMagician sqlMagition("tcp://localhost:3306","root","toor","CCIT");
     static RegexMagician regexMagition;
 
     const TCP& tcp= pdu.rfind_pdu<TCP>();
