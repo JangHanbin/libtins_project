@@ -1,6 +1,6 @@
 #include "sniffclass.h"
 #include <unistd.h>
-
+#include <netinet/ip.h>
 OpnSniffer::OpnSniffer(char *mDev, bool (*fp)(PDU&))
 {
     sniffDev=mDev;
@@ -47,12 +47,11 @@ void Wpa2Sniffer::addDecryptInfo(std::string passwd, std::string ssid)
     this->passwd=passwd;
     this->ssid=ssid;
 
-    //waiting for init decryptProxy
-    while(this->decryptProxy==nullptr);
-    this->decryptProxy->decrypter().add_ap_data(passwd,ssid);
-//    this->decryptProxy->decrypter().add_ap_data("angel1004","angel3");
-    startFlag=true;
 
+    while(this->decryptProxy==nullptr);//waiting for init decryptProxy
+
+    this->decryptProxy->decrypter().add_ap_data(passwd,ssid);
+    startFlag=true;
 
 }
 
@@ -65,10 +64,8 @@ void Wpa2Sniffer::run()
     auto decryptProxy=Crypto::make_wpa2_decrypter_proxy(funcPtr);
     this->decryptProxy=&decryptProxy; //init decryptProxy Pointer to addDecryptInfo
     //need to run after addDecryptInfo
-
     //Waiting for add_ap_data()
     while(!startFlag);
-
     sniffer.sniff_loop(decryptProxy);
 
     //if loop end
@@ -145,12 +142,11 @@ void APSniffer::decryptProxyAdder(Wpa2Sniffer& wpa2Sniffer)
         std::string passwd;
         std::cout<<"Input \" "<<it->second<<" \" Password : ";
         std::cin>>passwd;
-
         wpa2Sniffer.addDecryptInfo(passwd,it->second);
         upLinePrompt(apMaxNum+6);
 
         //Send Deauth Packet for Capture EAPOL
-        if(!deauthSender.sendDeauth(this->findBSSID(wpa2Sniffer.getSsid()),deauthSender.getBroadcast(), 128))
+        if(!deauthSender.sendDeauth(this->findBSSID(wpa2Sniffer.getSsid()),deauthSender.getBroadcast(), 70))
             std::cout<<"AP Not Found !, Can't send Deauth Packet"<<std::endl;
         mtx.unlock();
     }
@@ -261,7 +257,6 @@ bool DeauthSender::sendDeauth(DeauthSender::MACAddr bssid, DeauthSender::MACAddr
     RadioTap radio = RadioTap() / deauth;
 
     for (int i = 0; i < sendCount; ++i) {
-
         sender.send(radio,sniffDev);
 
     }

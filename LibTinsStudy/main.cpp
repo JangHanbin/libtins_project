@@ -3,7 +3,6 @@
 #include <thread>
 #include <algorithm>
 #include <mutex>
-
 #include "sniffclass.h"
 #include "sqlmagician.h"
 #include "printdata.h"
